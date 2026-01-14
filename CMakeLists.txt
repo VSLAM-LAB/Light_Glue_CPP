@@ -31,11 +31,42 @@ set(LIGHTGLUE_MODELS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/models" CACHE PATH "Path t
 
 # Find dependencies
 set(LIBTORCH_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/libtorch")
-set(CMAKE_PREFIX_PATH ${LIBTORCH_DIR})
+list(PREPEND CMAKE_PREFIX_PATH "${LIBTORCH_DIR}")
+#set(CMAKE_PREFIX_PATH ${LIBTORCH_DIR})
 
+# --- CUDA discovery hints for pixi/conda (Torch/Caffe2 legacy FindCUDA) ---
+if(DEFINED ENV{CONDA_PREFIX})
+    message(STATUS "CONDA_PREFIX=$ENV{CONDA_PREFIX}")
+
+    # Make CMake able to find packages from the pixi env as well
+    list(PREPEND CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
+
+    # Conda/pixi CUDA headers+libs usually live under targets/x86_64-linux
+    set(_CUDA_ROOT "$ENV{CONDA_PREFIX}")
+    if(EXISTS "$ENV{CONDA_PREFIX}/targets/x86_64-linux/include/cuda_runtime.h")
+        set(_CUDA_ROOT "$ENV{CONDA_PREFIX}/targets/x86_64-linux")
+    endif()
+    message(STATUS "Using CUDA root for legacy FindCUDA: ${_CUDA_ROOT}")
+
+    # Modern FindCUDAToolkit hint (used by find_package(CUDAToolkit))
+    set(CUDAToolkit_ROOT "$ENV{CONDA_PREFIX}" CACHE PATH "" FORCE)
+
+    # Legacy FindCUDA hints (used by Torch/Caffe2)
+    set(CUDA_TOOLKIT_ROOT_DIR "${_CUDA_ROOT}" CACHE PATH "" FORCE)
+    set(CUDA_INCLUDE_DIRS "${_CUDA_ROOT}/include" CACHE PATH "" FORCE)
+
+    # Libraries
+    if(EXISTS "${_CUDA_ROOT}/lib/libcudart.so")
+        set(CUDA_CUDART_LIBRARY "${_CUDA_ROOT}/lib/libcudart.so" CACHE FILEPATH "" FORCE)
+    elseif(EXISTS "${_CUDA_ROOT}/lib64/libcudart.so")
+        set(CUDA_CUDART_LIBRARY "${_CUDA_ROOT}/lib64/libcudart.so" CACHE FILEPATH "" FORCE)
+    endif()
+endif()
+
+
+find_package(CUDAToolkit REQUIRED)  
 find_package(Torch REQUIRED)
 find_package(OpenCV REQUIRED)
-find_package(CUDAToolkit REQUIRED)
 
 # Check CUDA version
 if(CUDAToolkit_VERSION VERSION_LESS "12.1")
@@ -189,3 +220,75 @@ add_custom_target(create_models_dir ALL
 # Print configuration information
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Models directory: ${LIGHTGLUE_MODELS_DIR}")
+
+# =========================
+# Install / export for reuse
+# =========================
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+# Option: build shared library (better for reuse) instead of static
+option(LIGHTGLUE_BUILD_SHARED "Build LightGlue as a shared library" OFF)
+if(LIGHTGLUE_BUILD_SHARED)
+    set_target_properties(${PROJECT_NAME}_lib PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+    )
+endif()
+
+# Make sure consumers get required include dirs
+target_include_directories(${PROJECT_NAME}_lib
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+# (Optional but recommended) expose C++ standard to consumers
+target_compile_features(${PROJECT_NAME}_lib PUBLIC cxx_std_20)
+
+# Export name for consumers
+set_target_properties(${PROJECT_NAME}_lib PROPERTIES
+    EXPORT_NAME lib
+)
+
+# Install the library + executable (exe optional)
+install(TARGETS ${PROJECT_NAME}_lib
+    EXPORT LightGlueTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+# Install public headers
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+)
+
+# Export targets file
+install(EXPORT LightGlueTargets
+    FILE LightGlueTargets.cmake
+    NAMESPACE LightGlue::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/LightGlue
+)
+
+# Generate and install Config + Version files
+set(LIGHTGLUE_CONFIG_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/LightGlue)
+
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/LightGlueConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/LightGlueConfig.cmake
+    INSTALL_DESTINATION ${LIGHTGLUE_CONFIG_INSTALL_DIR}
+)
+
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/LightGlueConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/LightGlueConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/LightGlueConfigVersion.cmake
+    DESTINATION ${LIGHTGLUE_CONFIG_INSTALL_DIR}
+)
