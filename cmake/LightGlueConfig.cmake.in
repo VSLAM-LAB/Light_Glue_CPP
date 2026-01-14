@@ -1,0 +1,13 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# If you want consumers to auto-find these:
+find_dependency(CUDAToolkit)
+find_dependency(OpenCV)
+
+# Torch is optional depending on how you want to link in ORB-SLAM2.
+# If ORB-SLAM2 won't use Torch directly, you can omit this and rely on transitive linking.
+find_dependency(Torch)
+
+include("${CMAKE_CURRENT_LIST_DIR}/LightGlueTargets.cmake")
