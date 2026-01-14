@@ -292,3 +292,10 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/LightGlueConfigVersion.cmake
     DESTINATION ${LIGHTGLUE_CONFIG_INSTALL_DIR}
 )
+
+# =========================
+# Build-tree export
+# =========================
+export(EXPORT LightGlueTargets
+       FILE "${CMAKE_CURRENT_BINARY_DIR}/LightGlueTargets.cmake"
+       NAMESPACE LightGlue::)
