@@ -10,13 +10,6 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
 
-# Enable LTO/IPO only for Release builds
-include(CheckIPOSupported)
-check_ipo_supported(RESULT IPO_SUPPORTED OUTPUT IPO_ERROR)
-if(IPO_SUPPORTED AND CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-endif()
-
 # Core configuration
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 17)
@@ -64,8 +57,15 @@ if(DEFINED ENV{CONDA_PREFIX})
 endif()
 
 
-find_package(CUDAToolkit REQUIRED)  
+find_package(CUDAToolkit REQUIRED)
+# find_package(Torch) pulls in libtorch's own Caffe2Config.cmake, which mis-calls
+# find_package_handle_standard_args() with a package-name mismatch (nvtx3 vs Caffe2) -- a dev/
+# author warning from Torch's installed CMake config, not from any CMakeLists.txt in this
+# project. Scoped around just this call (not a global -Wno-dev) so any real future dev warning
+# of our own still surfaces.
+set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON)
 find_package(Torch REQUIRED)
+unset(CMAKE_SUPPRESS_DEVELOPER_WARNINGS)
 find_package(OpenCV REQUIRED)
 
 # Check CUDA version
