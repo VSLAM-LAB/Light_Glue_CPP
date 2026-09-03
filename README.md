@@ -49,7 +49,6 @@ The repository includes a sample application demonstrating feature matching betw
 │   ├── feature/         # Feature extraction implementations
 │   └── matcher/         # Matcher implementations
 ├── examples/            # Example applications
-├── models/             # Directory for model weights
 └── CMakeLists.txt
 ```
 
@@ -63,9 +62,12 @@ The implementation follows the original Python architecture while leveraging C++
 
 ## Model Weights
 
-Place the model weights in the `models/` directory. The following models are supported:
-- ALIKED feature extractor weights
-- LightGlue matcher weights
+The weights are not tracked in this repository. At runtime they are loaded from the directory
+compiled in as `LIGHTGLUE_MODELS_DIR` (default `lightglue_models`, relative to the process working
+directory; override with `-DLIGHTGLUE_MODELS_DIR:STRING=...`). AllFeature-VSLAM downloads them from
+the HF repo `vslamlab/allfeature-vslamlab` (`lightglue_models/aliked-n16.pt`,
+`lightglue_models/aliked_lightglue.pt`). Supported files: ALIKED feature extractor weights
+(`aliked-t16/n16/n16rot/n32.pt`) and LightGlue matcher weights (`aliked_lightglue.pt`).
 
 ## Future Development
 

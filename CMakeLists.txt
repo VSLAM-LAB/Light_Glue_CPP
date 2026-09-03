@@ -20,7 +20,10 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Configure paths
-set(LIGHTGLUE_MODELS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/models" CACHE PATH "Path to model weights directory")
+# Compiled into the library (see add_definitions below). Default: the bare folder name, resolved
+# against the process cwd at runtime. Pass -DLIGHTGLUE_MODELS_DIR:STRING=<value> to change it; note
+# that an untyped -D value is converted to an absolute path by this CACHE PATH declaration.
+set(LIGHTGLUE_MODELS_DIR "lightglue_models" CACHE PATH "Directory holding the ALIKED/LightGlue .pt weights (relative paths are resolved against the cwd at runtime)")
 
 # Find dependencies
 set(LIBTORCH_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/libtorch")
@@ -210,11 +213,6 @@ set_target_properties(${PROJECT_NAME} ${PROJECT_NAME}_lib PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/lib/release"
         ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/lib/debug"
         ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/lib/release"
-)
-
-# Create models directory if it doesn't exist
-add_custom_target(create_models_dir ALL
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${LIGHTGLUE_MODELS_DIR}
 )
 
 # Print configuration information
