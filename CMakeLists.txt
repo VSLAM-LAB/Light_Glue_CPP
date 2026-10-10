@@ -15,7 +15,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-set(CMAKE_CUDA_ARCHITECTURES native)
+# GPU architectures of the CUDA kernels: the build machine's GPU by default; a parent project or a package build
+# sets an explicit list (e.g. "75-real;80-real;86-real;89-real;90"). Applied as a target property below, because
+# libtorch's CMake config sets CMAKE_CUDA_ARCHITECTURES to OFF (find_package(Torch)).
+set(LIGHTGLUE_CUDA_ARCHITECTURES "native" CACHE STRING "CUDA architectures of the LightGlue kernels")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -90,12 +93,14 @@ endif()
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     set(RELEASE_FLAGS
             -O3
-            -march=native
-            -mtune=native
             -fomit-frame-pointer
             -ffast-math
             -DNDEBUG
     )
+    # Tuned for the build machine only when built standalone; as a subproject the parent's architecture flags apply.
+    if(PROJECT_IS_TOP_LEVEL)
+        list(APPEND RELEASE_FLAGS -march=native -mtune=native)
+    endif()
 endif()
 
 # CUDA debug flags - simplified
@@ -187,6 +192,7 @@ target_link_libraries(${PROJECT_NAME}_lib
 
 # Properties for debug/release configurations
 set_target_properties(${PROJECT_NAME}_lib PROPERTIES
+        CUDA_ARCHITECTURES "${LIGHTGLUE_CUDA_ARCHITECTURES}"
         CUDA_SEPARABLE_COMPILATION ON
         CUDA_RESOLVE_DEVICE_SYMBOLS ON
         POSITION_INDEPENDENT_CODE ON
@@ -201,12 +207,18 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     )
 endif()
 
-# Example application
-add_executable(${PROJECT_NAME} examples/main.cpp)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}::lib)
+# Example application (standalone builds only)
+option(LIGHTGLUE_BUILD_EXAMPLES "Build the example application" ${PROJECT_IS_TOP_LEVEL})
+if(LIGHTGLUE_BUILD_EXAMPLES)
+    add_executable(${PROJECT_NAME} examples/main.cpp)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}::lib)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin/debug"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/release")
+endif()
 
 # Output directories with debug/release suffixes
-set_target_properties(${PROJECT_NAME} ${PROJECT_NAME}_lib PROPERTIES
+set_target_properties(${PROJECT_NAME}_lib PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin/debug"
         RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/release"
         LIBRARY_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/lib/debug"
@@ -248,7 +260,9 @@ set_target_properties(${PROJECT_NAME}_lib PROPERTIES
     EXPORT_NAME lib
 )
 
-# Install the library + executable (exe optional)
+# Install rules + package config: standalone builds only (a parent project links the static library directly)
+option(LIGHTGLUE_INSTALL "Install the library, headers and CMake package config" ${PROJECT_IS_TOP_LEVEL})
+if(LIGHTGLUE_INSTALL)
 install(TARGETS ${PROJECT_NAME}_lib
     EXPORT LightGlueTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -297,3 +311,4 @@ install(FILES
 export(EXPORT LightGlueTargets
        FILE "${CMAKE_CURRENT_BINARY_DIR}/LightGlueTargets.cmake"
        NAMESPACE LightGlue::)
+endif()
